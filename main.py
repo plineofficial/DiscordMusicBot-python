@@ -11,30 +11,27 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
-vc = None
 playChannelInfo = {}
 soung_queue = []
 FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
-def play_next():
+def play_next(vc):
 	if len(soung_queue) >= 1:
 		source = soung_queue.pop(0)[1]
-		vc.play(discord.FFmpegPCMAudio(source, **FFMPEG_OPTS), after = lambda e: play_next())
+		vc.play(discord.FFmpegPCMAudio(source, **FFMPEG_OPTS), after = lambda e: play_next(vc))
 
 @bot.command()
 async def play(ctx, url):
-	global vc
-	vChannel = ctx.message.author.voice
-	channel = None
-	if vChannel:
-		channel = vChannel.channel
+	channel = ctx.message.author.voice
+	if channel:
 		if not ctx.voice_client:
-			vc = await channel.connect()
+			await channel.channel.connect()
+		vc = ctx.guild.voice_client
 		try:
 			song_info, source = search(url)
 			embed = discord.Embed()
 			if not vc.is_playing():
-				vc.play(discord.FFmpegPCMAudio(source, **FFMPEG_OPTS), after = lambda e: play_next()) 
+				vc.play(discord.FFmpegPCMAudio(source, **FFMPEG_OPTS), after = lambda e: play_next(vc)) 
 				embed.title='Сейчас играет:'
 			else:
 				soung_queue.append([song_info['title'],source, url])
@@ -45,14 +42,16 @@ async def play(ctx, url):
 				value=url,
 				inline=False
 			)
-		except:
+		except: 
 			await ctx.send('Произошла ошибка, попробуйте еще раз!')
+			return
 		await ctx.send(embed=embed)
 	else: await ctx.send(f'{ctx.message.author.mention}, зайдите в гс канал!')
 
 @bot.command()
 async def skip(ctx):
-	if ctx.voice_client:
+	vc = ctx.voice_client
+	if vc:
 		if len(soung_queue) >= 1:
 			next_song = soung_queue[0]
 			embed = discord.Embed(
@@ -80,9 +79,10 @@ async def leave(ctx):
 
 @bot.command()
 async def pause(ctx):
-	if ctx.voice_client:
-		if ctx.voice_client.is_playing():
-			ctx.voice_client.pause()
+	vc = ctx.voice_client
+	if vc:
+		if vc.is_playing():
+			vc.pause()
 			await ctx.send('Иду сидеть на паузе')
 		else: await ctx.send('Я итак на паузе!')
 	else:
@@ -90,9 +90,10 @@ async def pause(ctx):
 
 @bot.command()
 async def resume(ctx):
-	if ctx.voice_client:
-		if ctx.voice_client.is_paused():
-			ctx.voice_client.resume()
+	vc = ctx.voice_client
+	if vc:
+		if vc.is_paused():
+			vc.resume()
 			await ctx.send('Продолжаю петь')
 		else: await ctx.send('Я итак пою!')
 	else:
